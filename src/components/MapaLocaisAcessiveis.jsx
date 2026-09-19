@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { APIProvider, AdvancedMarker, InfoWindow, Map, Pin, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
 import { buscarUsuario, cadastrarLocalAcessibilidade, listarLocaisAcessibilidade } from '../api';
+import accessibilityIcon from '../assets/accessibility.svg';
+import Avaliacoes from './Avaliacoes';
+import AtualizarLocalizacao from './AtualizarLocalizacao';
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 const CENTRO_PADRAO = { lat: -3.71839, lng: -38.5434 };
@@ -52,6 +55,50 @@ function RotaNoMapa({ origem, destino, solicitacao, onResultado, onErro }) {
 
     return () => renderer.setMap(null);
   }, [map, routesLibrary, origem, destino, solicitacao, onResultado, onErro]);
+
+  return null;
+}
+
+function EnquadrarLocaisProximos({ localizacao, locais, ativo }) {
+  const map = useMap();
+  const latitude = localizacao?.lat;
+  const longitude = localizacao?.lng;
+
+  useEffect(() => {
+    if (!map || !ativo || locais.length === 0) return;
+
+    const pontosValidos = locais
+      .map((local) => ({ lat: Number(local.latitude), lng: Number(local.longitude) }))
+      .filter((ponto) => Number.isFinite(ponto.lat) && Number.isFinite(ponto.lng));
+    if (pontosValidos.length === 0) return;
+
+    const temLocalizacao = latitude !== undefined && longitude !== undefined;
+    const origem = temLocalizacao ? { lat: latitude, lng: longitude } : null;
+    const locaisNoEnquadramento = origem
+      ? pontosValidos
+        .map((ponto) => ({ ponto, distancia: distanciaEmKm(origem, ponto) }))
+        .sort((a, b) => a.distancia - b.distancia)
+        .slice(0, 5)
+        .map(({ ponto }) => ponto)
+      : pontosValidos;
+    const pontos = origem ? [origem, ...locaisNoEnquadramento] : locaisNoEnquadramento;
+
+    const latitudes = pontos.map((ponto) => ponto.lat);
+    const longitudes = pontos.map((ponto) => ponto.lng);
+    if (pontos.length === 1) {
+      map.setCenter(pontos[0]);
+      map.setZoom(14);
+      return;
+    }
+
+    map.fitBounds({
+      north: Math.max(...latitudes),
+      south: Math.min(...latitudes),
+      east: Math.max(...longitudes),
+      west: Math.min(...longitudes),
+    }, 64);
+    if ((map.getZoom() || 0) > 15) map.setZoom(15);
+  }, [map, ativo, latitude, longitude, locais]);
 
   return null;
 }
@@ -179,6 +226,10 @@ export default function MapaLocaisAcessiveis({ token, userId, isAdmin, refreshTr
       ) : (
         <aside className="locais-sidebar">
           <h2>Locais acessíveis</h2>
+          <AtualizarLocalizacao
+            token={token}
+            onAtualizado={(coords) => setLocalizacaoUsuario(coords)}
+          />
           <label className="pesquisa-locais">
             <span>Pesquisar um local</span>
             <input
@@ -212,6 +263,14 @@ export default function MapaLocaisAcessiveis({ token, userId, isAdmin, refreshTr
                         ? <p><strong>Rota:</strong> {detalhesRota.distancia || distanciaDireta} · {detalhesRota.duracao}</p>
                         : distanciaDireta && <p><strong>Distância em linha reta:</strong> {distanciaDireta}</p>}
                       <button type="button" onClick={tracarRota}>Traçar rota até o local</button>
+
+                      <Avaliacoes
+                        token={token}
+                        userId={userId}
+                        localId={local.id}
+                        mediaAvaliacoes={Number(local.mediaAvaliacoes)}
+                        totalAvaliacoes={local.totalAvaliacoes}
+                      />
                     </div>
                   )}
                 </article>
@@ -225,10 +284,35 @@ export default function MapaLocaisAcessiveis({ token, userId, isAdmin, refreshTr
       <div className="mapa-container">
         <APIProvider apiKey={GOOGLE_MAPS_API_KEY} libraries={MAPS_LIBRARIES}>
           <Map style={{ width: '100%', height: '100%' }} defaultCenter={localizacaoUsuario || CENTRO_PADRAO} defaultZoom={12} mapId="locais-acessiveis" gestureHandling="greedy" onClick={selecionarPonto}>
-            {locais.map((local) => <AdvancedMarker key={local.id} position={{ lat: Number(local.latitude), lng: Number(local.longitude) }} onClick={() => selecionarLocal(local)} />)}
+            {locais.map((local) => (
+              <AdvancedMarker key={local.id} position={{ lat: Number(local.latitude), lng: Number(local.longitude) }} title={local.name} onClick={() => selecionarLocal(local)}>
+                <img className="marcador-acessibilidade" src={accessibilityIcon} alt="" />
+              </AdvancedMarker>
+            ))}
             {localizacaoUsuario && <AdvancedMarker position={localizacaoUsuario} title="Sua localização"><Pin background="#2563eb" borderColor="#ffffff" glyphColor="#ffffff" /></AdvancedMarker>}
             {pontoNovo && <AdvancedMarker position={pontoNovo} title="Novo local" />}
-            {selecionado && <InfoWindow position={destinoSelecionado} onCloseClick={() => setSelecionado(null)}><div className="usuario-card"><strong>{selecionado.name}</strong><span className="usuario-card-role">{selecionado.accessibilityType}</span>{distanciaDireta && <span>A aproximadamente {distanciaDireta}</span>}</div></InfoWindow>}
+            {selecionado && (
+              <InfoWindow position={destinoSelecionado} onCloseClick={() => setSelecionado(null)}>
+                <div className="mapa-local-card">
+                  <strong>{selecionado.name}</strong>
+                  <span className="usuario-card-role">{selecionado.accessibilityType}</span>
+                  <p>{selecionado.description || 'Nenhuma descrição informada.'}</p>
+                  {detalhesRota
+                    ? <p><strong>Rota:</strong> {detalhesRota.distancia || distanciaDireta} · {detalhesRota.duracao}</p>
+                    : distanciaDireta && <p><strong>Distância:</strong> aproximadamente {distanciaDireta}</p>}
+                  {!isAdmin && <button type="button" onClick={tracarRota}>Traçar rota</button>}
+
+                  <Avaliacoes
+                    token={token}
+                    userId={userId}
+                    localId={selecionado.id}
+                    mediaAvaliacoes={Number(selecionado.mediaAvaliacoes)}
+                    totalAvaliacoes={selecionado.totalAvaliacoes}
+                  />
+                </div>
+              </InfoWindow>
+            )}
+            <EnquadrarLocaisProximos localizacao={localizacaoUsuario} locais={locais} ativo={!isAdmin} />
             <RotaNoMapa origem={localizacaoUsuario} destino={destinoSelecionado} solicitacao={solicitacaoRota} onResultado={receberRota} onErro={receberErroRota} />
           </Map>
         </APIProvider>

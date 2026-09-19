@@ -132,6 +132,11 @@
 .local-card-detalhes { padding: 0 12px 12px; display: flex; flex-direction: column; gap: 10px; font-size: 14px; }
 .local-card-detalhes button { min-height: 44px; padding: 9px; border: none; border-radius: 6px; background: var(--accent); color: #fff; cursor: pointer; }
 
+.marcador-acessibilidade { width: 42px; height: 42px; display: block; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.35)); }
+.mapa-local-card { width: min(240px, 65vw); display: flex; flex-direction: column; gap: 6px; color: #08060d; padding: 3px; }
+.mapa-local-card p { font-size: 13px; line-height: 1.35; }
+.mapa-local-card button { min-height: 40px; margin-top: 4px; padding: 8px 12px; border: none; border-radius: 6px; background: #7c3aed; color: #fff; font-weight: 600; cursor: pointer; }
+
 .local-form label {
   display: flex;
   flex-direction: column;

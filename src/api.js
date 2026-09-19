@@ -63,3 +63,30 @@ export function cadastrarLocalAcessibilidade(token, local) {
     body: JSON.stringify(local),
   });
 }
+
+export function listarAvaliacoes(localId) {
+  return request(`/locais-acessibilidade/${localId}/avaliacoes`);
+}
+
+export function criarAvaliacao(token, localId, { nota, comentario }) {
+  return request(`/locais-acessibilidade/${localId}/avaliacoes`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ nota, comentario }),
+  });
+}
+
+export function editarAvaliacao(token, avaliacaoId, { nota, comentario }) {
+  return request(`/avaliacoes/${avaliacaoId}`, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ nota, comentario }),
+  });
+}
+
+export function removerAvaliacao(token, avaliacaoId) {
+  return request(`/avaliacoes/${avaliacaoId}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
